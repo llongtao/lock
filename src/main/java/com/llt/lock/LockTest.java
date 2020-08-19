@@ -15,7 +15,34 @@ import static java.lang.Thread.sleep;
 @SuppressWarnings("ALL")
 public class LockTest {
 
-    int num =  100;
+    static int num =  10000;
+
+
+
+    @Test
+    public  void tstNoLock() throws InterruptedException {
+        System.out.println(1);
+
+        CyclicBarrier cyclicBarrier = new CyclicBarrier(100);
+
+        for (int i = 0; i <100 ; i++) {
+            int finalI = i;
+            new Thread(()->{
+                try {
+                    cyclicBarrier.await();
+                    for (int j = 0; j <100 ; j++) {
+                        num --;
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
+            }).start();
+        }
+        sleep(1000);
+        System.out.println(num);
+    }
+
     @Test
     public  void tstReentrantLock() throws InterruptedException {
         System.out.println(1);
@@ -30,7 +57,9 @@ public class LockTest {
                     cyclicBarrier.await();
                     lock.lock();
                     //System.out.println(finalI +"加锁成功");
-                    num = num-1;
+                    for (int j = 0; j <100 ; j++) {
+                        num --;
+                    }
                     lock.unlock();
                     //System.out.println(finalI +"释放成功");
                 } catch (Exception e) {
@@ -58,8 +87,9 @@ public class LockTest {
                     cyclicBarrier.await();
                     lock.lock();
                     //System.out.println(finalI +"加锁成功");
-                    sleep(10);
-                    num = num-1;
+                    for (int j = 0; j <100 ; j++) {
+                        num --;
+                    }
                     lock.unlock();
                     //System.out.println(finalI +"释放成功");
                 } catch (Exception e) {
@@ -68,7 +98,9 @@ public class LockTest {
 
             }).start();
         }
-        sleep(1000);
+        sleep(2000);
         System.out.println(num);
     }
+
+
 }

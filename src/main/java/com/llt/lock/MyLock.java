@@ -1,6 +1,7 @@
 package com.llt.lock;
 
 import sun.misc.Unsafe;
+
 import java.lang.reflect.Field;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.AbstractQueuedSynchronizer;
@@ -36,10 +37,9 @@ public class MyLock implements Lock {
     private static final long LAST_OFFSET;
     private static final long NEXT_OFFSET;
 
+    private volatile Node last = new Node(null, null);
+    private volatile Node first = last;
 
-    private volatile Node first ;
-
-    private volatile Node last;
 
     private Thread currentThread;
 
@@ -68,70 +68,26 @@ public class MyLock implements Lock {
      */
     @Override
     public void lock() {
-        if (!tryLock() ) {
-            put(new Node(Thread.currentThread(), null));
+        if (!tryLock()) {
+            addWaiter();
             //false 相对时间 0L 无限时间阻塞
-            System.out.println("pack");
-            acquireQueued(addWaiter());
-        }
-    }
-
-    private void put(Node node) {
-        if (first == null){
-            UNSAFE.compareAndSwapObject(this,FIRST_OFFSET,null,node);
-        }
-        if (last != null) {
-            UNSAFE.compareAndSwapObject(last,NEXT_OFFSET,last.next,node);
-        }
-        UNSAFE.compareAndSwapObject(this,LAST_OFFSET,last,node);
-    }
-    final boolean acquireQueued(final Node node) {
-        boolean failed = true;
-        try {
-            boolean interrupted = false;
-            for (;;) {
-                final Node p = first;
-                if ( tryLock()) {
-                    setHead(node);
-                    p.next = null; // help GC
-                    failed = false;
-                    return interrupted;
-                }
-                UNSAFE.park(false, 0L);
-            }
-        } finally {
-//            if (failed)
-//                cancelAcquire(node);
+            UNSAFE.park(false, 0L);
+            lock();
         }
     }
 
     private Node addWaiter() {
         Node node = new Node(Thread.currentThread(), null);
-        // Try the fast path of enq; backup to full enq on failure
+
         Node pred = last;
+        while (!UNSAFE.compareAndSwapObject(this, LAST_OFFSET, pred, node)) {
+            pred = last;
+        }
         if (pred != null) {
-            if (UNSAFE.compareAndSwapObject(this,LAST_OFFSET,pred,node)) {
-                pred.next = node;
-                return node;
-            }
+            pred.next = node;
         }
-        enq(node);
+
         return node;
-    }
-    private Node enq(final Node node) {
-        for (;;) {
-            Node t = last;
-            if (t == null) {
-                if (UNSAFE.compareAndSwapObject(this,FIRST_OFFSET,first,new Node())){
-                    last = first;
-                }
-            } else {
-                if (UNSAFE.compareAndSwapObject(this,LAST_OFFSET,last,node)) {
-                    t.next = node;
-                    return t;
-                }
-            }
-        }
     }
 
     /**
@@ -143,8 +99,9 @@ public class MyLock implements Lock {
     public boolean tryLock() {
         Thread current = Thread.currentThread();
         if (state == 0) {
-            if (hasQueuedPredecessors() && UNSAFE.compareAndSwapInt(this, STATE_OFFSET, 0, 1)) {
+            if ((first.thread == current||last.thread==null)  && UNSAFE.compareAndSwapInt(this, STATE_OFFSET, 0, 1)) {
                 currentThread = current;
+                first.thread =null;
                 return true;
             }
         } else if (current == currentThread) {
@@ -154,9 +111,6 @@ public class MyLock implements Lock {
         return false;
     }
 
-    public final boolean hasQueuedPredecessors() {
-        return first == null || first.thread != Thread.currentThread();
-    }
 
     /**
      * 解锁
@@ -168,20 +122,19 @@ public class MyLock implements Lock {
             state = state - 1;
             if (state == 0) {
                 currentThread = null;
-                if (first == null) {
-                    return;
+                Node next = first.next;
+                if (next != null) {
+                    first = next;
                 }
                 Thread thread = first.thread;
-                first= first.next;
-                UNSAFE.unpark(thread);
-                System.out.println("解锁成功");
+                if (thread != null) {
+                    UNSAFE.unpark(thread);
+                }
             }
-        }else {
+        } else {
             System.out.println("不是当前线程");
         }
     }
-
-
 
 
     /**
@@ -236,12 +189,8 @@ public class MyLock implements Lock {
         throw new UnsupportedOperationException();
     }
 
-    public void setHead(Node node) {
-        first = node;
-        node.thread = null;
-    }
 
-    private static class Node{
+    private static class Node {
         Thread thread;
         volatile Node next;
 
