@@ -15,23 +15,22 @@ import static java.lang.Thread.sleep;
 @SuppressWarnings("ALL")
 public class LockTest {
 
-    static int num =  10000;
-
+    int num = 10000;
 
 
     @Test
-    public  void tstNoLock() throws InterruptedException {
-        System.out.println(1);
+    public void tstNoLock() throws InterruptedException {
+        System.out.println("tstNoLock");
 
-        CyclicBarrier cyclicBarrier = new CyclicBarrier(100);
+        CyclicBarrier cyclicBarrier = new CyclicBarrier(10);
 
-        for (int i = 0; i <100 ; i++) {
+        for (int i = 0; i < 10; i++) {
             int finalI = i;
-            new Thread(()->{
+            new Thread(() -> {
                 try {
                     cyclicBarrier.await();
-                    for (int j = 0; j <100 ; j++) {
-                        num --;
+                    for (int j = 0; j < 1000; j++) {
+                        num--;
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -44,24 +43,22 @@ public class LockTest {
     }
 
     @Test
-    public  void tstReentrantLock() throws InterruptedException {
-        System.out.println(1);
+    public void tstReentrantLock() throws InterruptedException {
+        System.out.println("tstReentrantLock");
 
         ReentrantLock lock = new ReentrantLock(true);
-        CyclicBarrier cyclicBarrier = new CyclicBarrier(100);
+        CyclicBarrier cyclicBarrier = new CyclicBarrier(10);
 
-        for (int i = 0; i <100 ; i++) {
+        for (int i = 0; i < 10; i++) {
             int finalI = i;
-            new Thread(()->{
+            new Thread(() -> {
                 try {
                     cyclicBarrier.await();
                     lock.lock();
-                    //System.out.println(finalI +"加锁成功");
-                    for (int j = 0; j <100 ; j++) {
-                        num --;
+                    for (int j = 0; j < 1000; j++) {
+                        num--;
                     }
                     lock.unlock();
-                    //System.out.println(finalI +"释放成功");
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -70,36 +67,36 @@ public class LockTest {
         }
         sleep(1000);
         System.out.println(num);
+        assert num==0;
     }
 
     @Test
-    public  void tstMyLock() throws InterruptedException {
-        System.out.println(2);
+    public void tstMyLock() throws InterruptedException {
+        System.out.println("tstMyLock");
 
         Lock lock = new MyLock();
 
-        CyclicBarrier cyclicBarrier = new CyclicBarrier(100);
-
-        for (int i = 0; i <100 ; i++) {
+        CyclicBarrier cyclicBarrier = new CyclicBarrier(10);
+        for (int i = 0; i < 10; i++) {
             int finalI = i;
-            new Thread(()->{
+            new Thread(() -> {
                 try {
                     cyclicBarrier.await();
                     lock.lock();
-                    //System.out.println(finalI +"加锁成功");
-                    for (int j = 0; j <100 ; j++) {
-                        num --;
+                    for (int j = 0; j < 1000; j++) {
+                        num--;
                     }
                     lock.unlock();
-                    //System.out.println(finalI +"释放成功");
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
 
             }).start();
         }
-        sleep(2000);
+        //lock.unlock();
+        sleep(1000);
         System.out.println(num);
+        assert num==0;
     }
 
 

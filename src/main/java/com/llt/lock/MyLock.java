@@ -4,7 +4,6 @@ import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.AbstractQueuedSynchronizer;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 
@@ -15,27 +14,26 @@ import java.util.concurrent.locks.Lock;
 public class MyLock implements Lock {
 
     /**
-     * volatile
-     * 编译器在用到这个变量时必须每次都小心地重新读取这个变量的值，
-     * 而不是使用保存在寄存器里的备份。
-     * 在本次线程内，当读取一个变量时，为提高存取速度，编译器优化时有时会先把变量读取到一个寄存器中；以后再取变量值时，就直接从寄存器中取值；
-     * 当变量值在本线程里改变时，会同时把变量的新值copy到该寄存器中，以便保持一致
-     * 当变量在因别的线程等而改变了值，该寄存器的值不会相应改变，从而造成应用程序读取的值和实际的变量值不一致
-     * 当该寄存器在因别的线程等而改变了值，原变量的值不会改变，从而造成应用程序读取的值和实际的变量值不一致
+     * volatile 让被他修饰内容具有可见性
+     *
+     * 可见性，是指线程之间的可见性，一个线程修改的状态对另一个线程是可见的。
+     * 也就是一个线程修改的结果。另一个线程马上就能看到。
+     * volatile修饰的变量不允许线程内部缓存和重排序，即直接修改内存。
+     * 所以对其他线程是可见的。
+     * 但是这里需要注意一个问题，volatile只能让被他修饰内容具有可见性，但不能保证它具有原子性。
+     * 比如 volatile int a = 0；之后有一个操作 a++；这个变量a具有可见性，但是a++ 依然是一个非原子操作，也就是这个操作同样存在线程安全问题。
+     *
      */
     private volatile int state;
 
     /**
-     * 不安全的类,提供了类似C++手动管理内存的能力
-     * 可以操作jvm管理之外的内存
-     * 可以提供CAS操作（比较并交换）是CPU指令级的操作
+     * 提供CAS操作
+     *
      */
     private static final Unsafe UNSAFE;
 
     private static final long STATE_OFFSET;
-    private static final long FIRST_OFFSET;
     private static final long LAST_OFFSET;
-    private static final long NEXT_OFFSET;
 
     private volatile Node last = new Node(null, null);
     private volatile Node first = last;
@@ -54,9 +52,7 @@ public class MyLock implements Lock {
         }
         try {
             STATE_OFFSET = UNSAFE.objectFieldOffset(MyLock.class.getDeclaredField("state"));
-            FIRST_OFFSET = UNSAFE.objectFieldOffset(MyLock.class.getDeclaredField("first"));
             LAST_OFFSET = UNSAFE.objectFieldOffset(MyLock.class.getDeclaredField("last"));
-            NEXT_OFFSET = UNSAFE.objectFieldOffset(Node.class.getDeclaredField("next"));
         } catch (Exception ex) {
             throw new Error(ex);
         }
@@ -70,9 +66,15 @@ public class MyLock implements Lock {
     public void lock() {
         if (!tryLock()) {
             addWaiter();
-            //false 相对时间 0L 无限时间阻塞
-            UNSAFE.park(false, 0L);
-            lock();
+            if (!tryLock()) {
+                //false 相对时间 0L 无限时间阻塞
+                UNSAFE.park(false, 0L);
+                lock();
+            }else {
+                System.out.println(Thread.currentThread().getId()+"获取锁");
+            }
+        }else {
+            System.out.println(Thread.currentThread().getId()+"获取锁");
         }
     }
 
@@ -80,12 +82,11 @@ public class MyLock implements Lock {
         Node node = new Node(Thread.currentThread(), null);
 
         Node pred = last;
+
         while (!UNSAFE.compareAndSwapObject(this, LAST_OFFSET, pred, node)) {
             pred = last;
         }
-        if (pred != null) {
-            pred.next = node;
-        }
+        pred.next = node;
 
         return node;
     }
@@ -99,9 +100,8 @@ public class MyLock implements Lock {
     public boolean tryLock() {
         Thread current = Thread.currentThread();
         if (state == 0) {
-            if ((first.thread == current||last.thread==null)  && UNSAFE.compareAndSwapInt(this, STATE_OFFSET, 0, 1)) {
+            if (!hasQueuedPredecessors(current) && UNSAFE.compareAndSwapInt(this, STATE_OFFSET, 0, 1)) {
                 currentThread = current;
-                first.thread =null;
                 return true;
             }
         } else if (current == currentThread) {
@@ -111,6 +111,14 @@ public class MyLock implements Lock {
         return false;
     }
 
+    private boolean hasQueuedPredecessors(Thread current) {
+        Node fst = first;
+        Node next = fst.next;
+        //头结点为当前线程,表示排队到自己了,有夺锁权
+        //next为空表示没人排队,有夺锁权
+        //next为当前线程表示第一次未抢到锁,自身在等待队列第一个,可能之前抢锁成功的已经释放锁了,有夺锁权
+        return !(fst.thread == current || next == null ||   next.thread == current);
+    }
 
     /**
      * 解锁
@@ -122,17 +130,25 @@ public class MyLock implements Lock {
             state = state - 1;
             if (state == 0) {
                 currentThread = null;
-                Node next = first.next;
-                if (next != null) {
-                    first = next;
-                }
-                Thread thread = first.thread;
-                if (thread != null) {
-                    UNSAFE.unpark(thread);
+                System.out.println(current.getId()+"解锁");
+
+                while (true){
+                    Node fst = first;
+                    Node next = fst.next;
+                    if (next != null) {
+                        first = next;
+                        Thread thread = next.thread;
+                        if (thread == current) {
+                            continue;
+                        }
+                        if (thread != null) {
+                            System.out.println("唤醒"+thread.getId());
+                            UNSAFE.unpark(thread);
+                        }
+                    }
+                    return;
                 }
             }
-        } else {
-            System.out.println("不是当前线程");
         }
     }
 
