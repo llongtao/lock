@@ -11,6 +11,7 @@ import java.util.concurrent.locks.Lock;
  * @author LILONGTAO
  * @date 2020-08-19
  */
+@SuppressWarnings("ALL")
 public class MyLock implements Lock {
 
     /**
