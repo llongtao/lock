@@ -1,5 +1,5 @@
 
-##java原生锁synchronized介绍
+## java原生锁synchronized介绍
 synchronized用的锁是存在java对象头中，上锁，改变的就是对象头。
 
 synchronized锁有5种状态：无锁，偏向锁，轻量级锁，重量级锁，GC标志信息。
