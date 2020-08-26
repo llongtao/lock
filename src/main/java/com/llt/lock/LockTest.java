@@ -43,6 +43,33 @@ public class LockTest {
     }
 
     @Test
+    public void tstSynchronized() throws InterruptedException {
+        System.out.println("tstSynchronized");
+
+        CyclicBarrier cyclicBarrier = new CyclicBarrier(10);
+
+        for (int i = 0; i < 10; i++) {
+            int finalI = i;
+            new Thread(() -> {
+                try {
+                    cyclicBarrier.await();
+                    synchronized (LockTest.class){
+                        for (int j = 0; j < 1000; j++) {
+                            num--;
+                        }
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
+            }).start();
+        }
+        sleep(1000);
+        System.out.println(num);
+        assert num==0;
+    }
+
+    @Test
     public void tstReentrantLock() throws InterruptedException {
         System.out.println("tstReentrantLock");
 
