@@ -72,6 +72,8 @@ synchronized是可重入锁：
 
 ## ReentrantLock简介
 ### 背景
+作者 Doug Lea
+
 Reentrantlock 是在java 1.5 并发包增加的一个可重入的锁，是基于AQS（AbstractQueuedSynchronized）实现的，它有公平锁和不公平锁两种实现方式。
 所谓ReentrantLock的再入特性，是指当一个线程试图获取一个它已经获取的锁时，这个获取动作就自动成功，
 这是对锁获取粒度的一个概念，也就是锁的持有是以线程为单位而不是基于调用次数.Java 锁实现强调再入性是为了和 pthread 的行为进行区分。

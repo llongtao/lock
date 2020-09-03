@@ -2,6 +2,7 @@ package com.llt.lock;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
